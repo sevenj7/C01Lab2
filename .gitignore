@@ -1,1 +1,14 @@
+# CSCC01 Lab 2
+
+# commands
 helpfulcommands.txt
+
+# dependencies
+*/node_modules
+
+# database
+*/data
+
+# misc
+.DS_Store
+
