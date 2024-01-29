@@ -6,15 +6,8 @@ import jwt from "jsonwebtoken";
 const app = express();
 const PORT = 4000;
 
-
-
-
-const mongoURL = "mongodb://localhost:27017";
+const mongoURL = "mongodb://localhost:27017/quirknotes";
 const dbName = "quirknotes";
-
-
-
-
 
 // Connect to MongoDB
 let db;
@@ -177,4 +170,114 @@ app.get("/getNote/:noteId", express.json(), async (req, res) => {
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
-  });
+});
+
+
+// Retrieve all notes belonging to the user
+app.get("/getAllNotes", express.json(), async (req, res) => {
+    try {
+        const token = req.headers.authorization.split(" ")[1];
+        jwt.verify(token, "secret-key", async (err, decoded) => {
+            if (err) {
+                return res.status(401).send("Unauthorized.");
+            }
+            const notes = db.collection(COLLECTIONS.notes);
+            const data = await notes.find({
+                username: decoded.username
+            }).toArray();
+            res.json({ response: data });
+        });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Delete note with given noteId
+app.delete("/deleteNote/:noteId", express.json(), async(req, res) => {
+    try {
+        // Basic param checking
+        const noteId = req.params.noteId;
+        if (!ObjectId.isValid(noteId)) {
+            return res.status(400).json({ error: "Invalid note ID." });
+        }
+        const token = req.headers.authorization.split(" ")[1];
+        jwt.verify(token, "secret-key", async (err, decoded) => {
+            if (err) {
+                return res.status(401).send("Unauthorized.");
+            }
+            // Find note with given ID
+            const collection = db.collection(COLLECTIONS.notes);
+            const data = await collection.findOne({
+                username: decoded.username,
+                _id: new ObjectId(noteId),
+            });
+            if (!data) {
+                return res
+                    .status(404)
+                    .json({ error: "Unable to find note with given ID." });
+            }
+            const delData = await collection.deleteOne({
+                username: decoded.username,
+                _id: new ObjectId(noteId),
+            });
+            
+            if (!delData || delData.deletedCount === 0) {
+                return res.status(500).json({error: "Error deleting note with id " + noteId});
+            }
+
+            return res.json({response: "Document with ID " + noteId + " properly deleted."});
+        });
+    } catch (err) {
+        return res.status(500).json({ error: err.message });
+    }
+});
+
+
+// Edit a note with given noteID
+app.patch("/editNote/:noteId", express.json(), async(req, res) => {
+    try {
+        const {title, content} = req.body;
+        const noteId = req.params.noteId;
+        if (!ObjectId.isValid(noteId)) {
+            return res.status(400).json({ error: "Invalid note ID." });
+        }
+        const token = req.headers.authorization.split(" ")[1];
+        jwt.verify(token, "secret-key", async (err, decoded) => {
+            if (err) {
+                return res.status(401).send("Unauthorized.");
+            }
+            // Find note with given ID
+            const collection = db.collection(COLLECTIONS.notes);
+            const data = await collection.findOne({
+                username: decoded.username,
+                _id: new ObjectId(noteId),
+            });
+            if (!data) {
+                return res
+                    .status(404)
+                    .json({ error: "Unable to find note with given ID." });
+            }
+            let changes = {};
+            if (title != null) {
+                changes.title = title;
+            }
+            if (content != null) {
+                changes.content = content;
+            }
+            const updateData = await collection.updateOne({
+                username: decoded.username,
+                _id: new ObjectId(noteId),
+            }, {
+                $set: changes
+            });
+
+            if (updateData.modifiedCount == 0) {
+                return res.status(500).json({error: "error modifying note with ID: " + noteId});
+            }
+            return res.json({ response: "Document with ID " + noteId + " properly updated." });
+        });
+    } catch(e) {
+        return res.status(500).json({ error: e.message });
+    }
+});
+
